@@ -43,6 +43,25 @@ static void test_validation(void)
         BIGNUM_BIT_TEST_BENCHMARK_STATUS_NULL_ARGUMENT);
 }
 
+/**
+ * @brief Checks benchmark-core legacy mode aliases accepted by the adapter.
+ * @details benchmark-core maps all_zero, all_nonzero and mixed to noop/tiny,
+ * default/medium and mixed/variable workload tokens before callbacks run.
+ */
+static void test_legacy_modes(void)
+{
+    static const char *const operations[] = { "noop", "default", "mixed" };
+    static const char *const sizes[] = { "tiny", "medium", "variable" };
+    benchmark_workload_t workload = make_workload();
+
+    for (size_t index = 0U; index < 3U; ++index) {
+        workload.operation_kind = operations[index];
+        workload.size_profile = sizes[index];
+        assert(bignum_bit_test_benchmark_validate_workload(&workload) ==
+            BIGNUM_BIT_TEST_BENCHMARK_STATUS_SUCCESS);
+    }
+}
+
 /** @brief Checks deterministic callback initialization and operation lifecycle. */
 static void test_callbacks(void)
 {
@@ -80,6 +99,7 @@ static void test_callbacks(void)
 int main(void)
 {
     test_validation();
+    test_legacy_modes();
     test_callbacks();
     puts("bignum_bit_test benchmark adapter tests: OK");
     return EXIT_SUCCESS;

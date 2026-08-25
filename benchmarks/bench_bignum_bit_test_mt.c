@@ -10,7 +10,7 @@
  */
 #include <stdlib.h>
 
-#include <benchmark_core.h>
+#include <benchmark_framework.h>
 
 #include "adapter/bignum_bit_test_benchmark_adapter.h"
 

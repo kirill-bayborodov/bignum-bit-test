@@ -9,7 +9,7 @@
 | JSON field | Значение в manifest | Bignum interpretation |
 |---|---|---|
 | `input_kind` | `zero`, `nonzero`, `mixed` | Форма исходного `bignum_t` dataset |
-| `operation_kind` | `bit-zero`, `bit-test`, `bit-word`, `bit-test`, `bit-random`, `bit-mixed` | Выбор representable left-bit test amount |
+| `operation_kind` | `bit-zero`, `bit-test`, `bit-word`, `bit-random`, `bit-mixed` | Выбор representable left-bit test amount; legacy `noop`, `default`, `mixed` также принимаются для `--data-mode` |
 | `measure_mode` | `end-to-end`, `kernel-only` | Включает либо исключает preparation copy из timed interval |
 | `size_profile` | `one`, `quarter`, `half`, `variable`, `near-capacity` | Logical word length of input `bignum_t` |
 | `capacity_profile` | `normal`, `near-capacity` | Storage-boundary workload condition |

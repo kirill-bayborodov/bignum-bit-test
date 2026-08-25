@@ -64,13 +64,13 @@ A `regression:true` field means the candidate median exceeded both the configure
 
 ## Bignum transport vocabulary
 
-`operation_kind` must begin with `bit test-`. It is not legal to substitute generic example values such as `xor` or `rotate`. The adapter validates these values before it initializes bignum state, therefore malformed profiles fail before their data become benchmark samples.
+`operation_kind` must use the project-specific `bit-*` vocabulary in manifests. Generic example values such as `xor` or `rotate` are not legal. For compatibility with benchmark-core legacy `--data-mode`, the adapter also accepts the aliases `noop`, `default` and `mixed`, which are mapped by the framework before callback execution. The adapter validates these values before it initializes bignum state, therefore malformed profiles fail before their data become benchmark samples.
 
 | `operation_kind` | Adapter bit test path |
 |---|---|
 | `bit-zero` | Always zero bit test amount |
 | `bit-test` | Deterministic representable sub-word amount |
 | `bit-word` | Deterministic representable whole-word amount |
-| `bit-test` | Deterministic representable whole-word-plus-bit amount |
 | `bit-random` | Deterministic representable amount derived from seed/iteration |
 | `bit-mixed` | Stable rotation through zero, bit, word and combined paths |
+| `noop`, `default`, `mixed` | Legacy aliases received from benchmark-core `--data-mode` |

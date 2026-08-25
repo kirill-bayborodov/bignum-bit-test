@@ -48,10 +48,14 @@ static int allowed(const char *value, const char *const *list)
 /** @brief Maps a workload size token to a valid bignum word length. */
 static size_t choose_length(const benchmark_workload_t *workload, uint64_t *state)
 {
-    if (equal_text(workload->size_profile, "one")) return 1U;
-    if (equal_text(workload->size_profile, "quarter")) return BIGNUM_CAPACITY / 4U;
-    if (equal_text(workload->size_profile, "half")) return BIGNUM_CAPACITY / 2U;
-    if (equal_text(workload->size_profile, "near-capacity")) return BIGNUM_CAPACITY;
+    if (equal_text(workload->size_profile, "one") ||
+        equal_text(workload->size_profile, "tiny")) return 1U;
+    if (equal_text(workload->size_profile, "quarter") ||
+        equal_text(workload->size_profile, "small")) return BIGNUM_CAPACITY / 4U;
+    if (equal_text(workload->size_profile, "half") ||
+        equal_text(workload->size_profile, "medium")) return BIGNUM_CAPACITY / 2U;
+    if (equal_text(workload->size_profile, "near-capacity") ||
+        equal_text(workload->size_profile, "large")) return BIGNUM_CAPACITY;
     return 1U + (size_t)(next_value(state) % (BIGNUM_CAPACITY / 2U));
 }
 
@@ -118,9 +122,15 @@ bignum_bit_test_benchmark_status_t bignum_bit_test_benchmark_validate_workload(
     const benchmark_workload_t *workload)
 {
     static const char *const input[] = { "zero", "nonzero", "mixed", NULL };
-    static const char *const operation[] = { "bit", "bit-zero", "bit-word", "bit-test", "bit-random", "bit-mixed", NULL };
+    static const char *const operation[] = {
+        "bit", "bit-zero", "bit-word", "bit-test", "bit-random", "bit-mixed",
+        "noop", "default", "mixed", NULL
+    };
     static const char *const measure[] = { "end-to-end", "kernel-only", NULL };
-    static const char *const size[] = { "one", "quarter", "half", "variable", "near-capacity", NULL };
+    static const char *const size[] = {
+        "one", "quarter", "half", "variable", "near-capacity",
+        "tiny", "small", "medium", "large", NULL
+    };
     static const char *const capacity[] = { "normal", "near-capacity", NULL };
     if (workload == NULL) return BIGNUM_BIT_TEST_BENCHMARK_STATUS_NULL_ARGUMENT;
     if (!allowed(workload->input_kind, input) || !allowed(workload->operation_kind, operation) ||
@@ -129,7 +139,13 @@ bignum_bit_test_benchmark_status_t bignum_bit_test_benchmark_validate_workload(
     return BIGNUM_BIT_TEST_BENCHMARK_STATUS_SUCCESS;
 }
 
-/** @brief Installs the bit-test callbacks into one framework adapter binding. */
+/**
+ * @brief Installs the bit-test callbacks into one framework adapter binding.
+ * @details The accepted vocabulary includes both project-specific matrix tokens
+ * and benchmark-core legacy aliases. The latter are produced by `--data-mode`
+ * before the adapter receives the workload and must remain valid for Makefile
+ * `bench`, `bench_full`, and `bench_cl` workflows.
+ */
 bignum_bit_test_benchmark_status_t bignum_bit_test_benchmark_adapter_init(benchmark_adapter_t *adapter)
 {
     if (adapter == NULL) return BIGNUM_BIT_TEST_BENCHMARK_STATUS_NULL_ARGUMENT;
