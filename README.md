@@ -397,6 +397,52 @@ gcc your_app.c \
 
 If the application requires symbols from the module dependency graph, prefer the distribution created by `make dist CONFIG=release` and link the resulting static library with the corresponding component libraries.
 
+## Documentation and Quality Gates
+
+Documentation is part of the executable engineering contract. A change is acceptable only when the implementation, public API, tests, benchmark protocol, JSON manifests, and README describe the same observable behavior. The canonical gate requirements are applied at artifact level rather than by a single repository-wide statement.
+
+### Required evidence by artifact
+
+| Artifact | Required documentation and compliance evidence |
+|---|---|
+| Public `.h` file | File-level Doxygen, documented public types and enums, comments for every complex field and status value, ownership/allocation model, thread-safety scope, and complete function contracts with parameters, return statuses, preconditions, postconditions, warnings, and complexity where relevant |
+| Internal `.c` or `.S` file | File-level Doxygen, documented static helpers, algorithm and invariant rationale, bounds/normalization/overflow behavior, cleanup or publication rules, and C/ASM ABI details including registers, stack alignment, clobbers, representation, and status propagation |
+| Test source | File-level purpose, documented non-trivial test scenarios, fixed inputs or seed policy, oracle/reference behavior, expected status/output, negative-path rationale, preservation checks, concurrency scope, and failure diagnostics |
+| Benchmark entry point and adapter | CLI/environment contract, workload vocabulary, input generation, warm-up and iteration semantics, ST/MT measurement scope, checksum/protocol markers, deterministic seed/fingerprint behavior, and status-to-process-exit mapping |
+| Committed JSON manifest | Adjacent `<manifest>.json.md` document with purpose, lifecycle, complete schema, required fields/defaults, allowed vocabulary, profile table, valid example, exact run command, modification procedure, baseline/regression policy, and malformed/unsupported-input behavior |
+| README and usage examples | Purpose, supported platform/toolchain, dependencies, submodule recovery, build/test commands, minimal API usage, status checking, ownership and cleanup, distribution, contribution workflow, and license |
+
+### Blocking documentation rules
+
+The following conditions are blocking defects:
+
+1. Documentation must be synchronized with every changed public signature, enum/status, complex field, CLI option, Make target, JSON field, profile identifier, or observable output protocol.
+2. `@brief` must be a concise one-line summary; algorithm, rationale, limits, and examples belong in `@details` or nearby explanatory text.
+3. Every pointer parameter must identify direction, NULL policy, ownership, lifetime, aliasing rules, and output state on success and failure. Every named status must identify its cause and whether outputs remain unchanged, partially written, or published.
+4. Complex arithmetic, bounds, normalization, memory, synchronization, benchmark-validity, and C/ASM boundary blocks must explain the invariant or rationale they protect rather than merely restating the syntax.
+5. Every committed JSON manifest must have a neighboring companion guide, and every complete JSON example and documented command must parse or run against the current revision without manual correction.
+6. Benchmark numbers must state revision, configuration, platform/CPU context, profile, repetitions, workload settings, and statistical interpretation. A single smoke run is not a stable performance conclusion.
+7. The public contract must state that `bignum_bit_test` does not mutate `num`, that invalid index/length paths preserve `*bit_value`, and that concurrent access is safe only for independent objects; concurrent writers require external synchronization.
+8. Exceptions must identify the artifact path, gate, reason, risk, and removal condition. A missing document, stale path, undocumented ownership rule, or contradictory contract cannot be waived as a style preference.
+
+### Compliance checklist
+
+Before merging a documentation or C11/ASM change, the author and reviewer confirm:
+
+```text
+[ ] Every changed artifact has the required file-level documentation.
+[ ] Every public type, status value, function, callback, and complex field is documented.
+[ ] Parameters include direction, NULL, ownership, lifetime, aliasing, units, and output semantics.
+[ ] Algorithms, concurrency, memory publication, and ASM boundaries include rationale comments.
+[ ] Deterministic and randomized tests document their oracle, seed/domain, and failure behavior.
+[ ] Every committed JSON has an adjacent companion guide with schema, vocabulary, and how-to.
+[ ] README examples include build/link commands, status checks, cleanup, and a failure path.
+[ ] Documented commands and complete JSON examples were reproduced on the current revision.
+[ ] No stale names, paths, profile IDs, or contradictory contracts remain.
+[ ] Lint, tests, benchmark smoke checks, and applicable Doxygen checks passed.
+[ ] An artifact-level QG checklist and any justified exceptions are attached to the review.
+```
+
 ## Contributing
 
 Contributions should preserve the public C/ASM contract, update deterministic and multithreaded tests when behavior changes, and run at least:
