@@ -15,19 +15,43 @@
 #define BIT_TEST_FNV_OFFSET UINT64_C(1469598103934665603)
 #define BIT_TEST_FNV_PRIME UINT64_C(1099511628211)
 
+/**
+ * @brief Holds one immutable benchmark source record and its mutable query state.
+ * @details benchmark-core initializes one source record and copies it before
+ * each measured operation. The adapter owns no heap storage; all fields remain
+ * valid for the lifetime of the record supplied by benchmark-core.
+ */
 typedef struct bit_test_benchmark_state {
-    bignum_t value;
-    size_t bit_index;
-    int bit_value;
+    bignum_t value; /**< [in,out] Caller/framework-owned normalized operand; valid during the callback. */
+    size_t bit_index; /**< [in,out] Zero-based bit position in [0, BIGNUM_CAPACITY * 64); updated after query. */
+    int bit_value; /**< [out] Last query result, -1 before operation and 0/1 after success. */
 } bit_test_benchmark_state_t;
 
-/** @brief Compares two optional workload tokens. */
+/**
+ * @brief Compares two non-NULL workload tokens.
+ * @details Equality is required for vocabulary checks; NULL is rejected rather
+ * than dereferenced, so malformed framework metadata becomes a validation miss.
+ * @param[in] left Borrowed NUL-terminated token; NULL is invalid.
+ * @param[in] right Borrowed NUL-terminated token; NULL is invalid.
+ * @return Non-zero only when both tokens are non-NULL and byte-equal.
+ * @complexity O(min(strlen(left), strlen(right))) time and O(1) space.
+ */
 static int equal_text(const char *left, const char *right)
 {
     return left != NULL && right != NULL && strcmp(left, right) == 0;
 }
 
-/** @brief Advances the deterministic adapter generator. */
+/**
+ * @brief Advances the deterministic pseudo-random state.
+ * @details The xorshift sequence is deterministic for a given non-zero seed and
+ * is used only to construct reproducible records, not as a security primitive.
+ * @param[in,out] state Caller-owned generator state; non-NULL and writable.
+ * @return The next generated 64-bit value; no allocation occurs.
+ * @pre `state` points to live storage.
+ * @post `*state` contains the next generator state and is never zero after the
+ * zero-state replacement.
+ * @complexity O(1) time and O(1) space.
+ */
 static uint64_t next_value(uint64_t *state)
 {
     if (*state == 0U) *state = UINT64_C(0x9e3779b97f4a7c15);
@@ -37,7 +61,14 @@ static uint64_t next_value(uint64_t *state)
     return *state;
 }
 
-/** @brief Tests whether a token belongs to a NULL-terminated vocabulary. */
+/**
+ * @brief Tests whether a token belongs to a NULL-terminated vocabulary.
+ * @param[in] value Borrowed token to validate; NULL is rejected.
+ * @param[in] list Caller-owned NULL-terminated token list; NULL is rejected.
+ * @return Non-zero when an exact token match exists, otherwise zero.
+ * @post Neither input is modified and no ownership is retained.
+ * @complexity O(number of vocabulary entries × token length) time and O(1) space.
+ */
 static int allowed(const char *value, const char *const *list)
 {
     if (value == NULL || list == NULL) return 0;
@@ -45,7 +76,16 @@ static int allowed(const char *value, const char *const *list)
     return 0;
 }
 
-/** @brief Maps a workload size token to a valid bignum word length. */
+/**
+ * @brief Maps a validated size token to a representable word length.
+ * @details The mapping keeps every result within capacity; near-capacity uses
+ * the full valid capacity and variable uses a deterministic bounded value.
+ * @param[in] workload Borrowed validated workload descriptor.
+ * @param[in,out] state Caller-owned deterministic generator state.
+ * @return A word count in [1, BIGNUM_CAPACITY].
+ * @pre `workload` and `state` are non-NULL and workload vocabulary is valid.
+ * @complexity O(1) time and O(1) space.
+ */
 static size_t choose_length(const benchmark_workload_t *workload, uint64_t *state)
 {
     if (equal_text(workload->size_profile, "one") ||
@@ -59,7 +99,17 @@ static size_t choose_length(const benchmark_workload_t *workload, uint64_t *stat
     return 1U + (size_t)(next_value(state) % (BIGNUM_CAPACITY / 2U));
 }
 
-/** @brief Fills one normalized deterministic bignum record. */
+/**
+ * @brief Fills one normalized deterministic bignum record.
+ * @details The complete record is cleared first so stale words cannot influence
+ * the checksum. A non-zero top word preserves the normalized-length invariant.
+ * @param[out] value Caller/framework-owned record to overwrite; non-NULL.
+ * @param[in] length Requested word count; bounded by BIGNUM_CAPACITY.
+ * @param[in,out] state Caller-owned deterministic generator state.
+ * @param[in] zero Non-zero requests the canonical zero record.
+ * @post `value` is normalized, contains no uninitialized words, and ownership is unchanged.
+ * @complexity O(BIGNUM_CAPACITY) time and O(1) auxiliary space.
+ */
 static void fill_value(bignum_t *value, size_t length, uint64_t *state, int zero)
 {
     memset(value, 0, sizeof(*value));
@@ -69,7 +119,22 @@ static void fill_value(bignum_t *value, size_t length, uint64_t *state, int zero
     if (value->words[value->len - 1U] == 0U) value->words[value->len - 1U] = 1U;
 }
 
-/** @brief Initializes one framework source state from validated metadata. */
+/**
+ * @brief Initializes one framework source state from validated metadata.
+ * @details Combines the workload seed with the sequence index, maps the input
+ * and size profiles, fills the immutable source record, and chooses a valid bit
+ * index. Returning a framework input error publishes no successful state.
+ * @param[out] opaque Framework-owned mutable record of adapter state size.
+ * @param[in] index Zero-based dataset sequence index.
+ * @param[in] workload Borrowed immutable workload metadata.
+ * @param[in] context Optional adapter context; unused and not owned.
+ * @return Named benchmark adapter status; success publishes a complete state,
+ * input error leaves the record unsuitable for measurement.
+ * @pre `opaque` and `workload` are non-NULL and workload validates.
+ * @post On success `value`, `bit_index` and sentinel `bit_value` are initialized.
+ * @thread_safety Safe for independent records; no shared mutable state.
+ * @complexity O(BIGNUM_CAPACITY) time and O(1) auxiliary space.
+ */
 static benchmark_adapter_status_t initialize(void *opaque, uint64_t index,
                                               const benchmark_workload_t *workload, void *context)
 {
@@ -89,7 +154,19 @@ static benchmark_adapter_status_t initialize(void *opaque, uint64_t index,
     return BENCHMARK_ADAPTER_STATUS_SUCCESS;
 }
 
-/** @brief Executes one selected-bit query on the mutable framework state. */
+/**
+ * @brief Executes one selected-bit query on the mutable framework state.
+ * @details Calls the public bignum operation, records its 0/1 result, and then
+ * advances the index so repeated calls cannot be optimized into one observation.
+ * @param[in,out] opaque Framework-owned mutable state; non-NULL.
+ * @param[in] iteration Framework iteration number used for deterministic index advance.
+ * @param[in] workload Borrowed workload metadata; unused by this callback.
+ * @param[in] context Optional adapter context; unused and not owned.
+ * @return Named framework adapter status; operation error leaves no successful sample.
+ * @post On success `bit_value` is 0/1 and the next index remains in capacity.
+ * @thread_safety Safe for independent framework state copies.
+ * @complexity O(1) time and O(1) auxiliary space.
+ */
 static benchmark_adapter_status_t operation(void *opaque, uint64_t iteration,
                                              const benchmark_workload_t *workload, void *context)
 {
@@ -101,7 +178,17 @@ static benchmark_adapter_status_t operation(void *opaque, uint64_t iteration,
     return BENCHMARK_ADAPTER_STATUS_SUCCESS;
 }
 
-/** @brief Hashes source, index and output bit into the framework checksum. */
+/**
+ * @brief Hashes source, index and output bit into the framework checksum.
+ * @details FNV-style accumulation observes every capacity word and metadata so
+ * the benchmark result remains data-dependent and resistant to dead-code removal.
+ * @param[in] opaque Borrowed immutable post-operation state; NULL yields checksum zero.
+ * @param[in] iteration Framework iteration mixed into the result.
+ * @param[in] context Optional adapter context; unused and not owned.
+ * @return Deterministic 64-bit checksum; no output pointer or ownership transfer.
+ * @thread_safety Safe for independent immutable state reads.
+ * @complexity O(BIGNUM_CAPACITY) time and O(1) space.
+ */
 static uint64_t checksum(const void *opaque, uint64_t iteration, void *context)
 {
     const bit_test_benchmark_state_t *state = opaque;
@@ -118,6 +205,13 @@ static uint64_t checksum(const void *opaque, uint64_t iteration, void *context)
     return hash ^ iteration;
 }
 
+/**
+ * @brief Implements adapter workload validation.
+ * @details Exact matching prevents generic framework metadata from silently
+ * selecting an unsupported bignum scenario. The static vocabularies are read-only
+ * and the caller's descriptor is never modified; the complete public parameter,
+ * status and ownership contract is declared in the adapter header.
+ */
 bignum_bit_test_benchmark_status_t bignum_bit_test_benchmark_validate_workload(
     const benchmark_workload_t *workload)
 {

@@ -2,8 +2,10 @@
  * @file test_bignum_bit_test.c
  * @brief Deterministic contract tests for bignum_bit_test.
  * @details The same source and assertions run against C11 and x86-64 YASM.
- * It checks every status, bit boundary, normalized-length rule, immutability,
- * and output preservation on failure.
+ * Fixed records cover zero, full-capacity and two-word complementary patterns.
+ * Expected values are a direct word-index/bit-mask oracle; invalid pointer,
+ * index and length cases assert named statuses and preserve an output canary.
+ * Each assertion reports its source location, making a mismatch reproducible.
  * @version 1.0.0
  */
 #include "bignum_bit_test.h"
@@ -12,14 +14,26 @@
 #include <stdio.h>
 #include <string.h>
 
-/** @brief Initializes a normalized scalar bignum record. */
+/**
+ * @brief Initializes a normalized scalar bignum record.
+ * @param[out] value Caller-owned record overwritten with zeroed storage.
+ * @param[in] word Fixed test word; zero produces normalized length zero.
+ * @post The record is normalized and contains no stale tail words.
+ */
 static void set_u64(bignum_t *value, uint64_t word)
 {
     memset(value, 0, sizeof(*value));
     if (word != 0U) { value->words[0] = word; value->len = 1U; }
 }
 
-/** @brief Checks one successful query and confirms that the input is unchanged. */
+/**
+ * @brief Checks one successful query and confirms that the input is unchanged.
+ * @param[in] input Borrowed normalized record retained unchanged by the API.
+ * @param[in] index Fixed zero-based bit index under test.
+ * @param[in] expected Direct-oracle result, exactly 0 or 1.
+ * @post The named success status, expected output and byte-for-byte preservation
+ * are asserted; assertion failure terminates the test with diagnostics.
+ */
 static void expect_bit(const bignum_t *input, size_t index, int expected)
 {
     bignum_t before = *input;
@@ -68,7 +82,13 @@ static void test_normalized_prefix(void)
     puts("test_normalized_prefix: PASSED");
 }
 
-/** @brief Checks all NULL, range and malformed-length statuses transactionally. */
+/**
+ * @brief Checks all NULL, range and malformed-length statuses transactionally.
+ * @details The output starts at sentinel 7. Each negative call must return the
+ * documented named status and preserve that sentinel, proving no partial write.
+ * The malformed record uses `BIGNUM_CAPACITY + 1` and the index cases use both
+ * the first invalid capacity value and `SIZE_MAX`.
+ */
 static void test_invalid_arguments(void)
 {
     bignum_t value;
@@ -87,7 +107,12 @@ static void test_invalid_arguments(void)
     puts("test_invalid_arguments: PASSED");
 }
 
-/** @brief Checks every intra-word offset using complementary bit patterns. */
+/**
+ * @brief Checks every intra-word offset using complementary bit patterns.
+ * @details Two fixed words, 0xAA... and 0x55..., provide the exact oracle
+ * `(offset & 1)` and its complement for all 128 positions. This validates the
+ * C/ASM bit numbering convention without pseudo-random input.
+ */
 static void test_intra_word_pattern(void)
 {
     bignum_t value;

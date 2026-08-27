@@ -1,9 +1,12 @@
 /**
  * @file test_bignum_bit_test_extra.c
  * @brief Extended randomized and stress tests for bignum_bit_test.
- * @details A deterministic xorshift generator and direct word/bit oracle cover
- * valid records, dirty capacity words, every bit position, malformed lengths,
- * and memory guards. The same source runs with C11 and x86-64 YASM.
+ * @details A deterministic xorshift generator seeded with
+ * `0x243f6a8885a308d3` and a direct word/bit oracle cover valid records, dirty
+ * capacity words, every bit position, malformed lengths and memory guards.
+ * The fuzz-like domain contains 20,000 records and five probes per record;
+ * every mismatch is reported by assert with source location. The same source
+ * runs with C11 and x86-64 YASM.
  * @version 1.0.0
  */
 #include "bignum_bit_test.h"
@@ -13,7 +16,12 @@
 #include <stdlib.h>
 #include <string.h>
 
-/** @brief Advances the deterministic test generator. */
+/**
+ * @brief Advances the deterministic test generator.
+ * @param[in,out] state Fixed-seed caller-owned generator state.
+ * @return Next deterministic 64-bit value.
+ * @post The state is non-zero and reproducible for the same initial seed.
+ */
 static uint64_t next_random(uint64_t *state)
 {
     if (*state == 0U) *state = UINT64_C(0x9e3779b97f4a7c15);
@@ -23,7 +31,14 @@ static uint64_t next_random(uint64_t *state)
     return *state;
 }
 
-/** @brief Computes the expected selected bit without calling the API. */
+/**
+ * @brief Computes the expected selected bit without calling the API.
+ * @details This direct word-index and mask model is the independent oracle for
+ * randomized and exhaustive cases; it treats words above normalized length as zero.
+ * @param[in] value Borrowed normalized record, unchanged by the oracle.
+ * @param[in] index Valid zero-based bit index.
+ * @return Expected bit value, exactly 0 or 1.
+ */
 static int oracle(const bignum_t *value, size_t index)
 {
     const size_t word = index / 64U;
@@ -41,7 +56,12 @@ static void check_valid(const bignum_t *value, size_t index)
     assert(memcmp(value, &before, sizeof(before)) == 0);
 }
 
-/** @brief Runs 20,000 deterministic randomized normalized-record queries. */
+/**
+ * @brief Runs 20,000 deterministic randomized normalized-record queries.
+ * @details Each record length is sampled uniformly from 0 through capacity and
+ * receives five valid probes. The fixed seed and independent oracle make failures
+ * reproducible; assert stops at the first mismatch with file and line evidence.
+ */
 static void test_fuzz_against_model(void)
 {
     uint64_t state = UINT64_C(0x243f6a8885a308d3);

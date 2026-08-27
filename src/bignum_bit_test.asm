@@ -1,11 +1,24 @@
 ; @file bignum_bit_test.asm
 ; @brief x86-64 YASM implementation for querying one bignum bit.
-; @details System V AMD64 ABI entry point. Arguments are rdi = const bignum_t*,
-; rsi = zero-based bit index, and rdx = int* output. The record layout is
-; words[32] at offset 0 and len at offset 256. The routine performs no calls,
-; uses no global state, preserves all callee-saved registers, and leaves the
-; output unchanged on every error path.
+; @details This symbol is the assembly side of the public C contract. Under the
+; System V AMD64 ABI, rdi carries const bignum_t*, rsi carries the zero-based
+; size_t bit index, and rdx carries the caller-allocated int* output. The
+; bignum representation is 32 little-endian uint64_t words at byte offset 0
+; followed by size_t len at byte offset 256; BIGNUM_CAPACITY is therefore 32.
+; The entry point is a leaf function: it makes no calls, allocates no stack
+; frame, uses no global state, and requires the caller-provided ABI stack
+; alignment to remain intact. It uses only caller-saved rax, rcx and r8 after
+; reading arguments, so no callee-saved register is clobbered. The output is an
+; int store of 0 or 1 only on success; every error path returns before the store.
+; Logical-zero words above normalized len are not inspected. The C enum values
+; are returned as signed two's-complement int in eax/rax: 0 success, -1 NULL,
+; -2 out-of-range bit index, -3 invalid len. No condition flags are part of the
+; public contract and are clobbered normally.
 ; @version 1.0.0
+; @pre rdi and rdx point to readable/writable live objects when non-NULL, and rsi is an arbitrary size_t accepted for explicit bounds validation.
+; @post On success [rdx] is 0 or 1 and the input record is unchanged, while every error path leaves [rdx] and the input record unchanged.
+; @thread_safety Safe for independent read-only objects, while concurrent writers require external synchronization.
+; @complexity O(1) time and O(1) auxiliary space.
 ; @return rax = bignum_bit_test_status_t: 0 success, -1 null argument,
 ;         -2 out-of-range bit index, -3 invalid len.
 

@@ -16,7 +16,7 @@ The required `bignum-core` component is included as a Git submodule at `libs/big
 | `bignum-core` | `libs/bignum-core` | Defines `bignum_t`, `BIGNUM_CAPACITY`, and common primitives |
 | `bignum-add-u64` | `libs/bignum-add-u64/dist` | Static library used by the module dependency graph |
 | `bignum-cmp` | `libs/bignum-cmp/dist` | Static library used by the module dependency graph |
-| `benchmark-framework` | `libs/benchmark-framework` | Pinned public `v1.0.0` C11 framework with `benchmark-core`, `json-lib`, matrix execution, and regression statistics |
+| `benchmark-framework` | `libs/benchmark-framework/dist` | Pinned public `v1.0.0` flat C11 distribution containing the public single header, static library, matrix/statistics tools, profiles, and documentation |
 
 Clone the repository with its submodule:
 
@@ -42,7 +42,7 @@ If the linker reports missing `-lbignum_add_u64` or `-lbignum_cmp`, build or pro
 - **Read-only representation:** successful queries leave the complete `bignum_t` unchanged.
 - **Deterministic verification:** unit, boundary, extended, multithreaded, and integration-runner tests are included.
 - **Reproducible benchmarks:** ST and MT runners accept deterministic seeds, report data fingerprints and checksums, and support legacy and parameterized workloads.
-- **Pinned C11 benchmark framework:** `libs/benchmark-framework` is pinned to `v1.0.0`; its recursive gitlinks pin `benchmark-core` and `json-lib`.
+- **Pinned C11 benchmark framework:** the CI `dist` artifact for public `v1.0.0` is installed under `libs/benchmark-framework/dist`; it contains the public `benchmark_framework.h`, `libbenchmark_framework.a`, matrix/statistics tools, profiles, and companion documentation. The project uses this artifact as a library and does not rely on an untracked framework source symlink.
 - **Bignum domain adapter:** `benchmarks/adapter/` maps generic transport fields to bignum-specific `bit-*` and operand-length semantics.
 - **Template benchmark protocol:** successful runners print a machine-readable `benchmark=...` line immediately before `Benchmark finished.`.
 - **Perf workflow:** Makefile targets provide sampling, repeated counter measurements, cloud-compatible software-event measurements, and report retention.
@@ -139,11 +139,14 @@ The expected summary is:
 === Summary: 0 / 5 failed ===
 ```
 
-Run static analysis:
+Run static analysis and build the API documentation:
 
 ```bash
 make lint
+make docs
 ```
+
+`make docs` uses the versioned `docs/Doxyfile`, generates HTML under `build/docs/html/`, and fails on Doxygen warnings. The configuration defines the project-specific `@thread_safety` and `@complexity` aliases used by the API comments.
 
 Run the sanitizer and race-detection targets:
 
@@ -278,7 +281,7 @@ For a fair one-thread/two-thread comparison, keep the total work and seed consta
   --data-mode mixed
 ```
 
-The reusable benchmark implementation is the public `libs/benchmark-framework` Git submodule pinned to `v1.0.0`. The project-local ST and MT sources call its `benchmark-core` lifecycle through `benchmarks/adapter/bignum_bit_test_benchmark_adapter.c`. The adapter validates bignum vocabulary, constructs deterministic `bignum_t` records, chooses representable bit indices, and maps `bignum_bit_test_status_t` to the named framework callback status.
+The reusable benchmark implementation is the public `v1.0.0` `benchmark-framework` distribution under `libs/benchmark-framework/dist`. The project-local ST and MT sources include `benchmark_framework.h` and link `libbenchmark_framework.a`; the distribution also supplies the matrix and statistics executables under `dist/tools/`. The adapter validates bignum vocabulary, constructs deterministic `bignum_t` records, chooses representable bit indices, and maps `bignum_bit_test_status_t` to the named framework callback status. The artifact is populated by the CI `dist` download step and must not be replaced by an untracked source-tree symlink.
 
 ## Perf workflow
 
@@ -450,6 +453,7 @@ Contributions should preserve the public C/ASM contract, update deterministic an
 ```bash
 make test CONFIG=release
 make lint
+make docs
 ```
 
 Performance changes should include reproducible benchmark parameters, matching ST/MT evidence, and a comparison that uses the same mode, seed, total work, thread count, CPU affinity, and counter configuration.

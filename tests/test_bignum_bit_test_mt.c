@@ -1,9 +1,11 @@
 /**
  * @file test_bignum_bit_test_mt.c
  * @brief Thread-safety tests for bignum_bit_test.
- * @details Eight workers repeatedly query independent immutable records. Every
- * result is compared with a local word/bit oracle and the input snapshot is
- * checked after each call.
+ * @details Eight workers, each executing 10,000 iterations, repeatedly query
+ * independent immutable records. Every result is compared with a local
+ * word/bit oracle and the input snapshot is checked after each call. The test
+ * intentionally does not share mutable bignum state, proving the documented
+ * independent-object scope rather than permitting concurrent writers.
  * @version 1.0.0
  */
 #include "bignum_bit_test.h"
@@ -16,12 +18,23 @@
 #define NUM_THREADS 8U
 #define NUM_ITERATIONS 10000U
 
+/**
+ * @brief Holds one worker's independent test object and failure flag.
+ * @details The main thread initializes one instance per worker and never shares
+ * an instance between workers. The worker writes only its own flag; the test
+ * joins all workers before reading the flags.
+ */
 typedef struct thread_data {
-    bignum_t value;
-    int failed;
+    bignum_t value; /**< [in] Immutable worker-owned operand snapshot. */
+    int failed; /**< [out] Worker-owned failure indicator, zero until mismatch. */
 } thread_data_t;
 
-/** @brief Computes the expected bit for a valid record. */
+/**
+ * @brief Computes the expected bit for a valid record.
+ * @param[in] value Borrowed immutable worker record.
+ * @param[in] index Valid zero-based bit position.
+ * @return Independent word/mask oracle value, exactly 0 or 1.
+ */
 static int oracle(const bignum_t *value, size_t index)
 {
     size_t word = index / 64U;
@@ -47,7 +60,12 @@ static void *worker_thread(void *opaque)
     return NULL;
 }
 
-/** @brief Runs independent worker threads and checks all results and ownership. */
+/**
+ * @brief Runs independent worker threads and checks all results and ownership.
+ * @details Creates eight workers, joins every worker, and fails if any oracle
+ * result or byte-for-byte input snapshot differs. The join is the publication
+ * boundary for each worker's failure flag.
+ */
 int main(void)
 {
     pthread_t threads[NUM_THREADS];
