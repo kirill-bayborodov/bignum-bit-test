@@ -80,7 +80,7 @@ jobs:
         done
 
     - name: Install build dependencies
-      run: sudo apt-get update && sudo apt-get install -y build-essential yasm cppcheck valgrind doxygen
+      run: sudo apt-get update && sudo apt-get install -y build-essential yasm cppcheck valgrind doxygen graphviz
 
     - name: Build project (Release)
       run: make build CONFIG=release
